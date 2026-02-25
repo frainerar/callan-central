@@ -714,23 +714,6 @@ function AdminPanel() {
 }
 
 // ── GENERAL TABLE VIEW (all teachers see all records) ─────────────────────────
-function GeneralTable() {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filterMonth, setFilterMonth] = useState("Todos");
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from("classes")
-        .select("*")
-        .order("date", { ascending: true });
-      setRecords(data || []);
-      setLoading(false);
-    };
-    load();
-  }, []);
 
   const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
 
