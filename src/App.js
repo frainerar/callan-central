@@ -15,8 +15,6 @@ const MONTHS = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-// 🔧 PROFESORES Y PINES — editá esta lista para agregar/quitar profes
-// Para cambiar un PIN, simplemente cambiá el número
 const TEACHERS = [
   { id: 1, name: "María",    pin: "1234", role: "teacher" },
   { id: 2, name: "Juan",     pin: "2345", role: "teacher" },
@@ -112,7 +110,6 @@ function PinLogin({ onLogin }) {
         </div>
       </div>
 
-      {/* PIN dots */}
       <div style={{
         display: "flex", gap: 16, marginBottom: 32,
         animation: shake ? "shake 0.4s ease" : "none",
@@ -133,7 +130,6 @@ function PinLogin({ onLogin }) {
         </div>
       )}
 
-      {/* Keypad */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, width: 240 }}>
         {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d, i) => (
           <button key={i} onClick={() => d === "⌫" ? handleDel() : d !== "" ? handleDigit(String(d)) : null}
@@ -152,7 +148,7 @@ function PinLogin({ onLogin }) {
   );
 }
 
-// ── FORM VIEW (teacher) ───────────────────────────────────────────────────────
+// ── FORM VIEW ─────────────────────────────────────────────────────────────────
 function FormView({ teacher, onSave }) {
   const [date, setDate]       = useState(todayStr());
   const [group, setGroup]     = useState(GROUPS[0]);
@@ -160,7 +156,7 @@ function FormView({ teacher, onSave }) {
   const [reading, setReading] = useState("");
   const [dictation, setDictation] = useState("");
   const [activity, setActivity]   = useState("");
-  const [status, setStatus]   = useState("idle"); // idle | saving | saved | error
+  const [status, setStatus]   = useState("idle");
 
   const handleSubmit = async () => {
     if (!newWork && !reading && !dictation && !activity) return;
@@ -257,6 +253,25 @@ function FormView({ teacher, onSave }) {
   );
 }
 
+// ── GENERAL TABLE VIEW ────────────────────────────────────────────────────────
+function GeneralTable() {
+  const [records, setRecords]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filterGroup, setFilterGroup] = useState("Todos");
+  const [filterMonth, setFilterMonth] = useState("Todos");
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("classes")
+        .select("*")
+        .order("date", { ascending: true });
+      setRecords(data || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
 
@@ -266,7 +281,6 @@ function FormView({ teacher, onSave }) {
         && (filterMonth === "Todos" || month === filterMonth);
   });
 
-  // Group records by date for table display
   const byDate = filtered.reduce((acc, r) => {
     if (!acc[r.date]) acc[r.date] = {};
     if (!acc[r.date][r.group]) acc[r.date][r.group] = [];
@@ -277,7 +291,6 @@ function FormView({ teacher, onSave }) {
 
   return (
     <div style={{ paddingBottom: 88 }}>
-      {/* Header */}
       <div style={{
         background: "linear-gradient(135deg,#1A1A2E,#2C3E50)",
         padding: "28px 20px 20px",
@@ -292,7 +305,6 @@ function FormView({ teacher, onSave }) {
         </div>
       </div>
 
-      {/* Filters */}
       <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {["Todos", ...GROUPS].map(g => {
@@ -323,7 +335,6 @@ function FormView({ teacher, onSave }) {
         )}
       </div>
 
-      {/* Table */}
       <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>Cargando...</div>}
         {!loading && sortedDates.length === 0 && (
@@ -332,7 +343,6 @@ function FormView({ teacher, onSave }) {
 
         {sortedDates.map(date => (
           <div key={date} style={{ background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
-            {/* Date header */}
             <div style={{
               background: "linear-gradient(90deg,#1A1A2E,#2C3E50)",
               padding: "10px 16px",
@@ -343,14 +353,12 @@ function FormView({ teacher, onSave }) {
               </span>
             </div>
 
-            {/* Groups for this date */}
             <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               {GROUPS.filter(g => byDate[date][g]).map(g => {
                 const col = COLORS[g] || { h: "#555", l: "#eee" };
                 const entries = byDate[date][g];
                 return (
                   <div key={g} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${col.l}` }}>
-                    {/* Group label */}
                     <div style={{
                       background: col.l, padding: "7px 14px",
                       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -360,7 +368,6 @@ function FormView({ teacher, onSave }) {
                         por {entries.map(e => e.teacher_name).join(", ")}
                       </span>
                     </div>
-                    {/* Fields */}
                     {entries.map(r => (
                       <div key={r.id} style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px", borderTop: `1px solid ${col.l}` }}>
                         {[["New Work", r.new_work], ["Reading", r.reading], ["Dictation", r.dictation], ["Actividad", r.activity]]
@@ -384,10 +391,10 @@ function FormView({ teacher, onSave }) {
   );
 }
 
-// ── MY RECORDS VIEW (teacher sees own records) ────────────────────────────────
+// ── MY RECORDS VIEW ───────────────────────────────────────────────────────────
 function MyRecords({ teacher }) {
-  const [records, setRecords]     = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [records, setRecords]         = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [filterGroup, setFilterGroup] = useState("Todos");
   const [filterMonth, setFilterMonth] = useState("Todos");
 
@@ -492,12 +499,12 @@ function MyRecords({ teacher }) {
 
 // ── ADMIN PANEL ───────────────────────────────────────────────────────────────
 function AdminPanel() {
-  const [records, setRecords]         = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [records, setRecords]             = useState([]);
+  const [loading, setLoading]             = useState(true);
   const [filterTeacher, setFilterTeacher] = useState("Todos");
-  const [filterGroup, setFilterGroup]   = useState("Todos");
-  const [filterMonth, setFilterMonth]   = useState("Todos");
-  const [adminTab, setAdminTab]         = useState("records"); // records | stats
+  const [filterGroup, setFilterGroup]     = useState("Todos");
+  const [filterMonth, setFilterMonth]     = useState("Todos");
+  const [adminTab, setAdminTab]           = useState("records");
 
   const load = async () => {
     setLoading(true);
@@ -523,7 +530,6 @@ function AdminPanel() {
         && (filterMonth === "Todos" || month === filterMonth);
   });
 
-  // Stats
   const total = records.length;
   const byTeacher = teachers.map(t => ({
     name: t.name,
@@ -540,7 +546,6 @@ function AdminPanel() {
 
   return (
     <div style={{ paddingBottom: 88 }}>
-      {/* Header */}
       <div style={{ background: "linear-gradient(135deg,#1A1A2E,#0F3460)", padding: "28px 20px 20px", borderRadius: "0 0 28px 28px", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <Icon name="shield" size={16}/>
@@ -549,7 +554,6 @@ function AdminPanel() {
         <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display',serif" }}>
           {loading ? "Cargando..." : `${total} clases totales`}
         </div>
-        {/* Admin sub-tabs */}
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           {[["records","📋 Registros"],["stats","📊 Estadísticas"]].map(([id, label]) => (
             <button key={id} onClick={() => setAdminTab(id)} style={{
@@ -564,9 +568,7 @@ function AdminPanel() {
 
       {adminTab === "records" && (
         <>
-          {/* Filters */}
           <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-            {/* By teacher */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {["Todos", ...teachers.map(t => t.name)].map(name => (
                 <button key={name} onClick={() => setFilterTeacher(name)} style={{
@@ -578,7 +580,6 @@ function AdminPanel() {
                 }}>👤 {name}</button>
               ))}
             </div>
-            {/* By group */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {["Todos", ...GROUPS].map(g => {
                 const gc = COLORS[g]; const active = filterGroup === g;
@@ -593,7 +594,6 @@ function AdminPanel() {
                 );
               })}
             </div>
-            {/* By month */}
             {usedMonths.length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Todos", ...usedMonths].map(m => (
@@ -612,7 +612,6 @@ function AdminPanel() {
             </div>
           </div>
 
-          {/* Records list */}
           <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 12 }}>
             {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>Cargando...</div>}
             {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay registros.</div>}
@@ -651,8 +650,6 @@ function AdminPanel() {
 
       {adminTab === "stats" && (
         <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* By teacher */}
           <div style={card}>
             <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR PROFESOR</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -670,7 +667,6 @@ function AdminPanel() {
             </div>
           </div>
 
-          {/* By group */}
           <div style={card}>
             <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR GRUPO</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -688,7 +684,6 @@ function AdminPanel() {
             </div>
           </div>
 
-          {/* By month */}
           {byMonth.length > 0 && (
             <div style={card}>
               <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR MES</div>
@@ -709,136 +704,6 @@ function AdminPanel() {
           {total === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay datos aún.</div>}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── GENERAL TABLE VIEW (all teachers see all records) ─────────────────────────
-
-  const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
-
-  const filtered = records.filter(r =>
-    filterMonth === "Todos" || MONTHS[new Date(r.date + "T12:00:00").getMonth()] === filterMonth
-  );
-
-  // Group records by date
-  const byDate = filtered.reduce((acc, r) => {
-    if (!acc[r.date]) acc[r.date] = {};
-    if (!acc[r.date][r.group]) acc[r.date][r.group] = [];
-    acc[r.date][r.group].push(r);
-    return acc;
-  }, {});
-
-  const dates = Object.keys(byDate).sort();
-
-  return (
-    <div style={{ paddingBottom: 88 }}>
-      {/* Header */}
-      <div style={{
-        background: "linear-gradient(135deg,#1A1A2E,#2C3E50)",
-        padding: "28px 20px 20px",
-        borderRadius: "0 0 28px 28px",
-        marginBottom: 20,
-      }}>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>
-          TABLA GENERAL
-        </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display',serif" }}>
-          Todas las clases
-        </div>
-
-        {/* Month filter */}
-        {usedMonths.length > 0 && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            {["Todos", ...usedMonths].map(m => (
-              <button key={m} onClick={() => setFilterMonth(m)} style={{
-                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                border: "none",
-                background: filterMonth === m ? "#fff" : "rgba(255,255,255,0.15)",
-                color: filterMonth === m ? "#1A1A2E" : "#fff",
-                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-              }}>{m}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 16 }}>
-        {loading && (
-          <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>
-            Cargando...
-          </div>
-        )}
-        {!loading && dates.length === 0 && (
-          <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>
-            No hay clases registradas aún.
-          </div>
-        )}
-
-        {dates.map(date => (
-          <div key={date} style={{ background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
-            {/* Date header */}
-            <div style={{
-              background: "#1A1A2E", padding: "12px 16px",
-              display: "flex", alignItems: "center", gap: 10,
-            }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", fontFamily: "'DM Mono',monospace" }}>
-                {fmtDate(date)}
-              </span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans',sans-serif" }}>
-                {Object.keys(byDate[date]).length} grupo{Object.keys(byDate[date]).length > 1 ? "s" : ""}
-              </span>
-            </div>
-
-            {/* Groups for this date */}
-            {GROUPS.filter(g => byDate[date][g]).map((g, gi) => {
-              const col = COLORS[g] || { h: "#555", l: "#eee" };
-              const entries = byDate[date][g];
-              return (
-                <div key={g} style={{
-                  borderTop: gi > 0 ? "1px solid #f0f0f0" : "none",
-                }}>
-                  {/* Group label */}
-                  <div style={{
-                    background: col.l, padding: "8px 16px",
-                    display: "flex", alignItems: "center", gap: 8,
-                  }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: "50%",
-                      background: col.h, flexShrink: 0,
-                    }}/>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: col.h, fontFamily: "'DM Sans',sans-serif", letterSpacing: 0.5 }}>
-                      {g.toUpperCase()}
-                    </span>
-                    <span style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace" }}>
-                      — {entries[0].teacher_name}
-                    </span>
-                  </div>
-
-                  {/* Fields */}
-                  <div style={{ padding: "10px 16px 12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
-                    {[
-                      ["New Work",  entries[0].new_work],
-                      ["Reading",   entries[0].reading],
-                      ["Dictation", entries[0].dictation],
-                      ["Actividad", entries[0].activity],
-                    ].filter(([, v]) => v).map(([label, val]) => (
-                      <div key={label}>
-                        <div style={{ fontSize: 10, color: "#bbb", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>
-                          {label.toUpperCase()}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#333", fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>
-                          {val}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -873,7 +738,6 @@ export default function App() {
         {tab === "records" && <MyRecords teacher={user} key={`my-${refresh}`} />}
         {tab === "admin"   && <AdminPanel />}
 
-        {/* Bottom nav */}
         <div style={{
           position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
           width: "100%", maxWidth: 480,
@@ -894,7 +758,6 @@ export default function App() {
               <span style={{ fontSize: 10, fontWeight: tab === id ? 700 : 500, fontFamily: "'DM Sans',sans-serif" }}>{label}</span>
             </button>
           ))}
-          {/* Logout */}
           <button onClick={handleLogout} style={{
             flex: 1, border: "none", background: "none", cursor: "pointer",
             display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
