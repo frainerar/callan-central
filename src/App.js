@@ -18,7 +18,7 @@ const MONTHS = [
 // 🔧 PROFESORES Y PINES — editá esta lista para agregar/quitar profes
 // Para cambiar un PIN, simplemente cambiá el número
 const TEACHERS = [
-  { id: 1, name: "María",    pin: "1234", role: "teacher" },
+  { id: 1, name: "Yosmi",    pin: "1234", role: "teacher" },
   { id: 2, name: "Juan",     pin: "2345", role: "teacher" },
   { id: 3, name: "Laura",    pin: "3456", role: "teacher" },
   { id: 99, name: "Admin",   pin: "0000", role: "admin"   },
