@@ -257,6 +257,151 @@ function FormView({ teacher, onSave }) {
   );
 }
 
+// ── GENERAL TABLE VIEW (all teachers see all records) ────────────────────────
+function GeneralTable() {
+  const [records, setRecords]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filterGroup, setFilterGroup] = useState("Todos");
+  const [filterMonth, setFilterMonth] = useState("Todos");
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("classes")
+        .select("*")
+        .order("date", { ascending: false });
+      setRecords(data || []);
+      setLoading(false);
+    })();
+  }, []);
+
+  const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
+
+  const filtered = records.filter(r => {
+    const month = MONTHS[new Date(r.date + "T12:00:00").getMonth()];
+    return (filterGroup === "Todos" || r.group === filterGroup)
+        && (filterMonth === "Todos" || month === filterMonth);
+  });
+
+  // Group records by date for table display
+  const byDate = filtered.reduce((acc, r) => {
+    if (!acc[r.date]) acc[r.date] = {};
+    if (!acc[r.date][r.group]) acc[r.date][r.group] = [];
+    acc[r.date][r.group].push(r);
+    return acc;
+  }, {});
+  const sortedDates = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a));
+
+  return (
+    <div style={{ paddingBottom: 88 }}>
+      {/* Header */}
+      <div style={{
+        background: "linear-gradient(135deg,#1A1A2E,#2C3E50)",
+        padding: "28px 20px 20px",
+        borderRadius: "0 0 28px 28px",
+        marginBottom: 20,
+      }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>
+          TABLA GENERAL
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display',serif" }}>
+          {loading ? "Cargando..." : `${filtered.length} clases`}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["Todos", ...GROUPS].map(g => {
+            const gc = COLORS[g]; const active = filterGroup === g;
+            return (
+              <button key={g} onClick={() => setFilterGroup(g)} style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: active ? `2px solid ${gc ? gc.h : "#1A1A2E"}` : "2px solid #e0e0e0",
+                background: active ? (gc ? gc.l : "#1A1A2E") : "#fafafa",
+                color: active ? (gc ? gc.h : "#fff") : "#999",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}>{g}</button>
+            );
+          })}
+        </div>
+        {usedMonths.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Todos", ...usedMonths].map(m => (
+              <button key={m} onClick={() => setFilterMonth(m)} style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: filterMonth === m ? "2px solid #1A1A2E" : "2px solid #e0e0e0",
+                background: filterMonth === m ? "#1A1A2E" : "#fafafa",
+                color: filterMonth === m ? "#fff" : "#999",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}>{m}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>Cargando...</div>}
+        {!loading && sortedDates.length === 0 && (
+          <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay clases registradas aún.</div>
+        )}
+
+        {sortedDates.map(date => (
+          <div key={date} style={{ background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
+            {/* Date header */}
+            <div style={{
+              background: "linear-gradient(90deg,#1A1A2E,#2C3E50)",
+              padding: "10px 16px",
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, fontFamily: "'DM Mono',monospace" }}>
+                📅 {fmtDate(date)}
+              </span>
+            </div>
+
+            {/* Groups for this date */}
+            <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+              {GROUPS.filter(g => byDate[date][g]).map(g => {
+                const col = COLORS[g] || { h: "#555", l: "#eee" };
+                const entries = byDate[date][g];
+                return (
+                  <div key={g} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${col.l}` }}>
+                    {/* Group label */}
+                    <div style={{
+                      background: col.l, padding: "7px 14px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: col.h, fontFamily: "'DM Sans',sans-serif" }}>{g}</span>
+                      <span style={{ fontSize: 11, color: col.h, fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>
+                        por {entries.map(e => e.teacher_name).join(", ")}
+                      </span>
+                    </div>
+                    {/* Fields */}
+                    {entries.map(r => (
+                      <div key={r.id} style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px", borderTop: `1px solid ${col.l}` }}>
+                        {[["New Work", r.new_work], ["Reading", r.reading], ["Dictation", r.dictation], ["Actividad", r.activity]]
+                          .filter(([, v]) => v)
+                          .map(([label, val]) => (
+                            <div key={label}>
+                              <div style={{ fontSize: 9, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
+                              <div style={{ fontSize: 13, color: "#333", fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>{val}</div>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── MY RECORDS VIEW (teacher sees own records) ────────────────────────────────
 function MyRecords({ teacher }) {
   const [records, setRecords]     = useState([]);
