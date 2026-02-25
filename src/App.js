@@ -15,8 +15,7 @@ const MONTHS = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-// 🔧 PROFESORES Y PINES — editá esta lista para agregar/quitar profes
-// Para cambiar un PIN, simplemente cambiá el número
+// 🔧 PROFESORES Y PINES
 const TEACHERS = [
   { id: 1, name: "Yosmi",    pin: "1234", role: "teacher" },
   { id: 2, name: "Juan",     pin: "2345", role: "teacher" },
@@ -61,6 +60,7 @@ const Icon = ({ name, size = 20 }) => {
     users:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={s}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
     shield:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={s}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     spin:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{...s, animation:"spin 1s linear infinite"}}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>,
+    edit:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={s}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
   };
   return icons[name] || null;
 };
@@ -112,7 +112,6 @@ function PinLogin({ onLogin }) {
         </div>
       </div>
 
-      {/* PIN dots */}
       <div style={{
         display: "flex", gap: 16, marginBottom: 32,
         animation: shake ? "shake 0.4s ease" : "none",
@@ -133,7 +132,6 @@ function PinLogin({ onLogin }) {
         </div>
       )}
 
-      {/* Keypad */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, width: 240 }}>
         {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d, i) => (
           <button key={i} onClick={() => d === "⌫" ? handleDel() : d !== "" ? handleDigit(String(d)) : null}
@@ -160,7 +158,7 @@ function FormView({ teacher, onSave }) {
   const [reading, setReading] = useState("");
   const [dictation, setDictation] = useState("");
   const [activity, setActivity]   = useState("");
-  const [status, setStatus]   = useState("idle"); // idle | saving | saved | error
+  const [status, setStatus]   = useState("idle");
 
   const handleSubmit = async () => {
     if (!newWork && !reading && !dictation && !activity) return;
@@ -257,10 +255,249 @@ function FormView({ teacher, onSave }) {
   );
 }
 
+// ── ALL RECORDS VIEW (teachers see all records) ─────────────────────────────
+function AllRecords({ teacher }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterGroup, setFilterGroup] = useState("Todos");
+  const [filterMonth, setFilterMonth] = useState("Todos");
+  const [filterTeacher, setFilterTeacher] = useState("Todos");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    new_work: "", reading: "", dictation: "", activity: ""
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("classes")
+      .select("*")
+      .order("date", { ascending: false });
+    setRecords(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("¿Estás seguro de eliminar esta clase?")) {
+      await supabase.from("classes").delete().eq("id", id);
+      load();
+    }
+  };
+
+  const handleEdit = (record) => {
+    setEditingId(record.id);
+    setEditForm({
+      new_work: record.new_work || "",
+      reading: record.reading || "",
+      dictation: record.dictation || "",
+      activity: record.activity || ""
+    });
+  };
+
+  const handleSaveEdit = async (id) => {
+    const { error } = await supabase
+      .from("classes")
+      .update({
+        new_work: editForm.new_work,
+        reading: editForm.reading,
+        dictation: editForm.dictation,
+        activity: editForm.activity
+      })
+      .eq("id", id);
+
+    if (!error) {
+      setEditingId(null);
+      load();
+    }
+  };
+
+  const teachers = [...new Set(records.map(r => r.teacher_name))];
+  const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
+
+  const filtered = records.filter(r => {
+    const month = MONTHS[new Date(r.date + "T12:00:00").getMonth()];
+    return (filterGroup === "Todos" || r.group === filterGroup)
+        && (filterMonth === "Todos" || month === filterMonth)
+        && (filterTeacher === "Todos" || r.teacher_name === filterTeacher);
+  });
+
+  // Estadísticas
+  const totalRegistros = records.length;
+  const registrosHoy = records.filter(r => r.date === todayStr()).length;
+  const misRegistros = records.filter(r => r.teacher_id === teacher.id).length;
+
+  return (
+    <div style={{ paddingBottom: 88 }}>
+      <div style={{ background: "linear-gradient(135deg,#1A1A2E,#2C3E50)", padding: "28px 20px 24px", borderRadius: "0 0 28px 28px", marginBottom: 20 }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 4 }}>
+          TODAS LAS CLASES
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display',serif" }}>
+          {loading ? "..." : `${filtered.length} clases`}
+        </div>
+        
+        {/* Mini stats */}
+        <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 20 }}>
+            <span style={{ fontSize: 12, color: "#fff" }}>📊 Total: {totalRegistros}</span>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 20 }}>
+            <span style={{ fontSize: 12, color: "#fff" }}>📅 Hoy: {registrosHoy}</span>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 20 }}>
+            <span style={{ fontSize: 12, color: "#fff" }}>👤 Tuyos: {misRegistros}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+        {teachers.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Todos", ...teachers].map(name => (
+              <button key={name} onClick={() => setFilterTeacher(name)} style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: filterTeacher === name ? "2px solid #1A1A2E" : "2px solid #e0e0e0",
+                background: filterTeacher === name ? "#1A1A2E" : "#fafafa",
+                color: filterTeacher === name ? "#fff" : "#999",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}>👤 {name}</button>
+            ))}
+          </div>
+        )}
+        
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["Todos", ...GROUPS].map(g => {
+            const gc = COLORS[g]; const active = filterGroup === g;
+            return (
+              <button key={g} onClick={() => setFilterGroup(g)} style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: active ? `2px solid ${gc ? gc.h : "#1A1A2E"}` : "2px solid #e0e0e0",
+                background: active ? (gc ? gc.l : "#1A1A2E") : "#fafafa",
+                color: active ? (gc ? gc.h : "#fff") : "#999",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}>{g}</button>
+            );
+          })}
+        </div>
+        
+        {usedMonths.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Todos", ...usedMonths].map(m => (
+              <button key={m} onClick={() => setFilterMonth(m)} style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                border: filterMonth === m ? "2px solid #1A1A2E" : "2px solid #e0e0e0",
+                background: filterMonth === m ? "#1A1A2E" : "#fafafa",
+                color: filterMonth === m ? "#fff" : "#999",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              }}>{m}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Records list */}
+      <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>Cargando...</div>}
+        {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>No hay clases aún.</div>}
+        
+        {filtered.map(r => {
+          const col = COLORS[r.group] || { h: "#555", l: "#eee" };
+          const isOwnRecord = r.teacher_id === teacher.id;
+          const isEditing = editingId === r.id;
+          
+          return (
+            <div key={r.id} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
+              <div style={{ background: `linear-gradient(90deg,${col.h},${col.h}cc)`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{r.group}</span>
+                  <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>{fmtDate(r.date)}</span>
+                  <span style={{ 
+                    background: isOwnRecord ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.15)", 
+                    color: "#fff", 
+                    fontSize: 11, 
+                    padding: "2px 8px", 
+                    borderRadius: 99,
+                    fontWeight: isOwnRecord ? 600 : 400
+                  }}>
+                    👤 {r.teacher_name} {isOwnRecord && "(tú)"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {isOwnRecord && !isEditing && (
+                    <button onClick={() => handleEdit(r)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff" }}>
+                      <Icon name="edit" size={16}/>
+                    </button>
+                  )}
+                  {isOwnRecord && (
+                    <button onClick={() => handleDelete(r.id)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff" }}>
+                      <Icon name="trash" size={16}/>
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {isEditing ? (
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <input
+                    value={editForm.new_work}
+                    onChange={(e) => setEditForm({...editForm, new_work: e.target.value})}
+                    placeholder="New Work"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={editForm.reading}
+                    onChange={(e) => setEditForm({...editForm, reading: e.target.value})}
+                    placeholder="Reading"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={editForm.dictation}
+                    onChange={(e) => setEditForm({...editForm, dictation: e.target.value})}
+                    placeholder="Dictation"
+                    style={inputStyle}
+                  />
+                  <input
+                    value={editForm.activity}
+                    onChange={(e) => setEditForm({...editForm, activity: e.target.value})}
+                    placeholder="Actividad"
+                    style={inputStyle}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => handleSaveEdit(r.id)} style={{ flex: 1, padding: "10px", background: col.h, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 600 }}>
+                      Guardar
+                    </button>
+                    <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: "10px", background: "#e0e0e0", color: "#666", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 600 }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+                  {[["New Work", r.new_work], ["Reading", r.reading], ["Dictation", r.dictation], ["Actividad", r.activity]]
+                    .filter(([, v]) => v)
+                    .map(([label, val]) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 10, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
+                        <div style={{ fontSize: 13, color: "#333", fontWeight: 500 }}>{val}</div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── MY RECORDS VIEW (teacher sees own records) ────────────────────────────────
 function MyRecords({ teacher }) {
-  const [records, setRecords]     = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filterGroup, setFilterGroup] = useState("Todos");
   const [filterMonth, setFilterMonth] = useState("Todos");
 
@@ -278,8 +515,10 @@ function MyRecords({ teacher }) {
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id) => {
-    await supabase.from("classes").delete().eq("id", id);
-    setRecords(r => r.filter(x => x.id !== id));
+    if (window.confirm("¿Estás seguro de eliminar esta clase?")) {
+      await supabase.from("classes").delete().eq("id", id);
+      load();
+    }
   };
 
   const usedMonths = [...new Set(records.map(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()]))];
@@ -330,18 +569,18 @@ function MyRecords({ teacher }) {
       </div>
 
       <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>Cargando...</div>}
-        {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay clases aún.</div>}
+        {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>Cargando...</div>}
+        {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>No hay clases aún.</div>}
         {filtered.map(r => {
           const col = COLORS[r.group] || { h: "#555", l: "#eee" };
           return (
             <div key={r.id} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
               <div style={{ background: `linear-gradient(90deg,${col.h},${col.h}cc)`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: "'DM Sans',sans-serif" }}>{r.group}</span>
+                  <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{r.group}</span>
                   <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>{fmtDate(r.date)}</span>
                 </div>
-                <button onClick={() => handleDelete(r.id)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center" }}>
+                <button onClick={() => handleDelete(r.id)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff" }}>
                   <Icon name="trash" size={16}/>
                 </button>
               </div>
@@ -351,7 +590,7 @@ function MyRecords({ teacher }) {
                   .map(([label, val]) => (
                     <div key={label}>
                       <div style={{ fontSize: 10, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
-                      <div style={{ fontSize: 13, color: "#333", fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>{val}</div>
+                      <div style={{ fontSize: 13, color: "#333", fontWeight: 500 }}>{val}</div>
                     </div>
                   ))}
               </div>
@@ -363,14 +602,18 @@ function MyRecords({ teacher }) {
   );
 }
 
-// ── ADMIN PANEL ───────────────────────────────────────────────────────────────
+// ── ADMIN PANEL MEJORADO ─────────────────────────────────────────────────────
 function AdminPanel() {
-  const [records, setRecords]         = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filterTeacher, setFilterTeacher] = useState("Todos");
-  const [filterGroup, setFilterGroup]   = useState("Todos");
-  const [filterMonth, setFilterMonth]   = useState("Todos");
-  const [adminTab, setAdminTab]         = useState("records"); // records | stats
+  const [filterGroup, setFilterGroup] = useState("Todos");
+  const [filterMonth, setFilterMonth] = useState("Todos");
+  const [adminTab, setAdminTab] = useState("records");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    new_work: "", reading: "", dictation: "", activity: ""
+  });
 
   const load = async () => {
     setLoading(true);
@@ -382,8 +625,37 @@ function AdminPanel() {
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (id) => {
-    await supabase.from("classes").delete().eq("id", id);
-    setRecords(r => r.filter(x => x.id !== id));
+    if (window.confirm("¿Estás seguro de eliminar esta clase?")) {
+      await supabase.from("classes").delete().eq("id", id);
+      load();
+    }
+  };
+
+  const handleEdit = (record) => {
+    setEditingId(record.id);
+    setEditForm({
+      new_work: record.new_work || "",
+      reading: record.reading || "",
+      dictation: record.dictation || "",
+      activity: record.activity || ""
+    });
+  };
+
+  const handleSaveEdit = async (id) => {
+    const { error } = await supabase
+      .from("classes")
+      .update({
+        new_work: editForm.new_work,
+        reading: editForm.reading,
+        dictation: editForm.dictation,
+        activity: editForm.activity
+      })
+      .eq("id", id);
+
+    if (!error) {
+      setEditingId(null);
+      load();
+    }
   };
 
   const teachers = TEACHERS.filter(t => t.role === "teacher");
@@ -396,19 +668,34 @@ function AdminPanel() {
         && (filterMonth === "Todos" || month === filterMonth);
   });
 
-  // Stats
+  // Stats avanzadas
   const total = records.length;
+  const hoy = new Date().toISOString().split('T')[0];
+  const registrosHoy = records.filter(r => r.date === hoy).length;
+  
+  const hace7Dias = new Date();
+  hace7Dias.setDate(hace7Dias.getDate() - 7);
+  const registrosSemana = records.filter(r => new Date(r.date) >= hace7Dias).length;
+  
+  const hace30Dias = new Date();
+  hace30Dias.setDate(hace30Dias.getDate() - 30);
+  const registrosMes = records.filter(r => new Date(r.date) >= hace30Dias).length;
+  const promedioDiario = (registrosMes / 30).toFixed(1);
+
   const byTeacher = teachers.map(t => ({
     name: t.name,
     count: records.filter(r => r.teacher_id === t.id).length,
   }));
+  
   const byGroup = GROUPS.map(g => ({
     group: g, col: COLORS[g] || { h: "#555", l: "#eee" },
     count: records.filter(r => r.group === g).length,
   }));
+  
   const byMonth = MONTHS
     .map(m => ({ month: m, count: records.filter(r => MONTHS[new Date(r.date + "T12:00:00").getMonth()] === m).length }))
     .filter(x => x.count > 0);
+  
   const maxCount = Math.max(...[...byTeacher, ...byGroup, ...byMonth].map(x => x.count), 1);
 
   return (
@@ -422,6 +709,27 @@ function AdminPanel() {
         <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display',serif" }}>
           {loading ? "Cargando..." : `${total} clases totales`}
         </div>
+        
+        {/* Mini stats cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginTop: 16 }}>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "12px", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>HOY</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{registrosHoy}</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "12px", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>SEMANA</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{registrosSemana}</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "12px", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>MES</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{registrosMes}</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.1)", padding: "12px", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>PROMEDIO</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{promedioDiario}</div>
+          </div>
+        </div>
+
         {/* Admin sub-tabs */}
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           {[["records","📋 Registros"],["stats","📊 Estadísticas"]].map(([id, label]) => (
@@ -439,7 +747,6 @@ function AdminPanel() {
         <>
           {/* Filters */}
           <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-            {/* By teacher */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {["Todos", ...teachers.map(t => t.name)].map(name => (
                 <button key={name} onClick={() => setFilterTeacher(name)} style={{
@@ -447,11 +754,10 @@ function AdminPanel() {
                   border: filterTeacher === name ? "2px solid #1A1A2E" : "2px solid #e0e0e0",
                   background: filterTeacher === name ? "#1A1A2E" : "#fafafa",
                   color: filterTeacher === name ? "#fff" : "#999",
-                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                  cursor: "pointer",
                 }}>👤 {name}</button>
               ))}
             </div>
-            {/* By group */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {["Todos", ...GROUPS].map(g => {
                 const gc = COLORS[g]; const active = filterGroup === g;
@@ -461,12 +767,11 @@ function AdminPanel() {
                     border: active ? `2px solid ${gc ? gc.h : "#1A1A2E"}` : "2px solid #e0e0e0",
                     background: active ? (gc ? gc.l : "#1A1A2E") : "#fafafa",
                     color: active ? (gc ? gc.h : "#fff") : "#999",
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    cursor: "pointer",
                   }}>{g}</button>
                 );
               })}
             </div>
-            {/* By month */}
             {usedMonths.length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Todos", ...usedMonths].map(m => (
@@ -475,12 +780,12 @@ function AdminPanel() {
                     border: filterMonth === m ? "2px solid #1A1A2E" : "2px solid #e0e0e0",
                     background: filterMonth === m ? "#1A1A2E" : "#fafafa",
                     color: filterMonth === m ? "#fff" : "#999",
-                    cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    cursor: "pointer",
                   }}>{m}</button>
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 12, color: "#aaa", fontFamily: "'DM Mono',monospace" }}>
+            <div style={{ fontSize: 12, color: "#aaa" }}>
               Mostrando {filtered.length} de {total} registros
             </div>
           </div>
@@ -488,33 +793,81 @@ function AdminPanel() {
           {/* Records list */}
           <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 12 }}>
             {loading && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>Cargando...</div>}
-            {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay registros.</div>}
+            {!loading && filtered.length === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40 }}>No hay registros.</div>}
+            
             {filtered.map(r => {
               const col = COLORS[r.group] || { h: "#555", l: "#eee" };
+              const isEditing = editingId === r.id;
+              
               return (
                 <div key={r.id} style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
                   <div style={{ background: `linear-gradient(90deg,${col.h},${col.h}cc)`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: "'DM Sans',sans-serif" }}>{r.group}</span>
+                      <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{r.group}</span>
                       <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "'DM Mono',monospace" }}>{fmtDate(r.date)}</span>
-                      <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 11, padding: "2px 8px", borderRadius: 99, fontFamily: "'DM Sans',sans-serif" }}>
+                      <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 11, padding: "2px 8px", borderRadius: 99 }}>
                         👤 {r.teacher_name}
                       </span>
                     </div>
-                    <button onClick={() => handleDelete(r.id)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center" }}>
-                      <Icon name="trash" size={16}/>
-                    </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {!isEditing && (
+                        <button onClick={() => handleEdit(r)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff" }}>
+                          <Icon name="edit" size={16}/>
+                        </button>
+                      )}
+                      <button onClick={() => handleDelete(r.id)} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer", color: "#fff" }}>
+                        <Icon name="trash" size={16}/>
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
-                    {[["New Work", r.new_work], ["Reading", r.reading], ["Dictation", r.dictation], ["Actividad", r.activity]]
-                      .filter(([, v]) => v)
-                      .map(([label, val]) => (
-                        <div key={label}>
-                          <div style={{ fontSize: 10, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
-                          <div style={{ fontSize: 13, color: "#333", fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>{val}</div>
-                        </div>
-                      ))}
-                  </div>
+                  
+                  {isEditing ? (
+                    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                      <input
+                        value={editForm.new_work}
+                        onChange={(e) => setEditForm({...editForm, new_work: e.target.value})}
+                        placeholder="New Work"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={editForm.reading}
+                        onChange={(e) => setEditForm({...editForm, reading: e.target.value})}
+                        placeholder="Reading"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={editForm.dictation}
+                        onChange={(e) => setEditForm({...editForm, dictation: e.target.value})}
+                        placeholder="Dictation"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={editForm.activity}
+                        onChange={(e) => setEditForm({...editForm, activity: e.target.value})}
+                        placeholder="Actividad"
+                        style={inputStyle}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => handleSaveEdit(r.id)} style={{ flex: 1, padding: "10px", background: col.h, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 600 }}>
+                          Guardar
+                        </button>
+                        <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: "10px", background: "#e0e0e0", color: "#666", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 600 }}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+                      {[["New Work", r.new_work], ["Reading", r.reading], ["Dictation", r.dictation], ["Actividad", r.activity]]
+                        .filter(([, v]) => v)
+                        .map(([label, val]) => (
+                          <div key={label}>
+                            <div style={{ fontSize: 10, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 1, marginBottom: 2 }}>{label.toUpperCase()}</div>
+                            <div style={{ fontSize: 13, color: "#333", fontWeight: 500 }}>{val}</div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -524,62 +877,56 @@ function AdminPanel() {
 
       {adminTab === "stats" && (
         <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* By teacher */}
           <div style={card}>
             <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR PROFESOR</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {byTeacher.map(({ name, count }) => (
                 <div key={name}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#333", fontFamily: "'DM Sans',sans-serif" }}>👤 {name}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#1A1A2E", fontFamily: "'DM Mono',monospace" }}>{count}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#333" }}>👤 {name}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#1A1A2E" }}>{count}</span>
                   </div>
                   <div style={{ background: "#f0f0f0", borderRadius: 99, height: 8, overflow: "hidden" }}>
-                    <div style={{ width: total > 0 ? `${(count/total)*100}%` : "0%", background: "linear-gradient(90deg,#1A1A2E,#4472C4)", height: "100%", borderRadius: 99, transition: "width 0.6s" }}/>
+                    <div style={{ width: total > 0 ? `${(count/total)*100}%` : "0%", background: "linear-gradient(90deg,#1A1A2E,#4472C4)", height: "100%", borderRadius: 99 }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* By group */}
           <div style={card}>
             <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR GRUPO</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {byGroup.map(({ group, col, count }) => (
                 <div key={group}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: col.h, fontFamily: "'DM Sans',sans-serif" }}>{group}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#333", fontFamily: "'DM Mono',monospace" }}>{count}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: col.h }}>{group}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#333" }}>{count}</span>
                   </div>
                   <div style={{ background: "#f0f0f0", borderRadius: 99, height: 8, overflow: "hidden" }}>
-                    <div style={{ width: total > 0 ? `${(count/total)*100}%` : "0%", background: `linear-gradient(90deg,${col.h},${col.h}88)`, height: "100%", borderRadius: 99, transition: "width 0.6s" }}/>
+                    <div style={{ width: total > 0 ? `${(count/total)*100}%` : "0%", background: `linear-gradient(90deg,${col.h},${col.h}88)`, height: "100%", borderRadius: 99 }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* By month */}
           {byMonth.length > 0 && (
             <div style={card}>
               <div style={{ fontSize: 11, color: "#aaa", fontFamily: "'DM Mono',monospace", letterSpacing: 2, marginBottom: 16 }}>POR MES</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {byMonth.map(({ month, count }) => (
                   <div key={month} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 88, fontSize: 13, color: "#666", fontFamily: "'DM Sans',sans-serif", flexShrink: 0 }}>{month}</div>
+                    <div style={{ width: 88, fontSize: 13, color: "#666", flexShrink: 0 }}>{month}</div>
                     <div style={{ flex: 1, background: "#f0f0f0", borderRadius: 99, height: 8, overflow: "hidden" }}>
-                      <div style={{ width: `${(count/maxCount)*100}%`, background: "linear-gradient(90deg,#1A1A2E,#4472C4)", height: "100%", borderRadius: 99 }}/>
+                      <div style={{ width: `${(count/maxCount)*100}%`, background: "linear-gradient(90deg,#1A1A2E,#4472C4)", height: "100%", borderRadius: 99 }} />
                     </div>
-                    <div style={{ width: 28, textAlign: "right", fontSize: 13, fontWeight: 700, color: "#333", fontFamily: "'DM Mono',monospace" }}>{count}</div>
+                    <div style={{ width: 28, textAlign: "right", fontSize: 13, fontWeight: 700, color: "#333" }}>{count}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {total === 0 && <div style={{ textAlign: "center", color: "#bbb", padding: 40, fontFamily: "'DM Sans',sans-serif" }}>No hay datos aún.</div>}
         </div>
       )}
     </div>
@@ -588,12 +935,19 @@ function AdminPanel() {
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser]   = useState(null);
-  const [tab, setTab]     = useState("form");
+  const [user, setUser] = useState(null);
+  const [tab, setTab] = useState("form");
   const [refresh, setRefresh] = useState(0);
 
-  const handleLogin  = (teacher) => { setUser(teacher); setTab(teacher.role === "admin" ? "admin" : "form"); };
-  const handleLogout = () => { setUser(null); setTab("form"); };
+  const handleLogin = (teacher) => { 
+    setUser(teacher); 
+    setTab(teacher.role === "admin" ? "admin" : "form"); 
+  };
+  
+  const handleLogout = () => { 
+    setUser(null); 
+    setTab("form"); 
+  };
 
   if (!user) return <PinLogin onLogin={handleLogin} />;
 
@@ -604,6 +958,7 @@ export default function App() {
     : [
         { id: "form",    label: "Registrar", icon: "plus"  },
         { id: "records", label: "Mis clases", icon: "list" },
+        { id: "all",     label: "Todos",      icon: "users" }, // 👈 NUEVA PESTAÑA
       ];
 
   return (
@@ -612,6 +967,7 @@ export default function App() {
       <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#f5f6fa" }}>
         {tab === "form"    && <FormView teacher={user} onSave={() => setRefresh(r => r+1)} />}
         {tab === "records" && <MyRecords teacher={user} key={refresh} />}
+        {tab === "all"     && <AllRecords teacher={user} key={refresh} />}
         {tab === "admin"   && <AdminPanel />}
 
         {/* Bottom nav */}
@@ -649,3 +1005,4 @@ export default function App() {
     </>
   );
 }
+ 
